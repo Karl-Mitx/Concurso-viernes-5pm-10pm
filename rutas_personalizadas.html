@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EcoBici • Mapa base con rutas (rescate)</title>
+
+  <!-- Leaflet CSS (CDN primario + respaldo) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+
+  <!-- LRM CSS (primario + respaldo) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css">
+
+  <style>
+    html, body { height:100%; margin:0; }
+    #map { height: 90vh; width: 100%; }
+    .ui {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      padding: 6px 8px; background:#fff; border:1px solid #ddd; border-radius:8px;
+      position: fixed; z-index: 9999; top: 10px; left: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.08);
+    }
+    .ui button { padding:6px 10px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:pointer; }
+    .ui small { color:#666; display:block; margin-top:4px; }
+    .badge { display:inline-block; padding:2px 6px; border-radius:999px; font-size:12px; }
+    .ok { background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9; }
+    .warn { background:#fff3cd; color:#7a5d00; border:1px solid #ffe08a; }
+    .err { background:#fdecea; color:#b71c1c; border:1px solid #f8c7c3; }
+  </style>
+</head>
+<body>
+
+<div class="ui">
+  <div><b>Rutas Leaflet</b></div>
+  <button id="pick">Seleccionar (Origen → Destino)</button>
+  <button id="clear">Limpiar</button>
+  <button id="swap">Invertir</button>
+  <div id="status" style="margin-top:6px">
+    <span class="badge warn" id="cdnStatus">CDN…</span>
+    <span class="badge warn" id="tileStatus">Tiles…</span>
+  </div>
+  <small>Distancia: <span id="dist">—</span> · Tiempo: <span id="time">—</span></small>
+</div>
+
+<div id="map"></div>
+
+<!-- Leaflet JS (primario + respaldo) -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- LRM (primario + respaldo) -->
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+
+<script>
+(function(){
+  // ==== Verificación rápida de carga de librerías
+  const cdnBadge = document.getElementById('cdnStatus');
+  if (window.L && L.Routing) { cdnBadge.textContent='CDN OK'; cdnBadge.className='badge ok'; }
+  else { cdnBadge.textContent='CDN BLOQUEADO'; cdnBadge.className='badge err'; }
+
+  // ==== Mapa base
+  const CENTER = [15.726, -88.605]; // Puerto Barrios
+  const map = L.map('map').setView(CENTER, 14);
+  window.addEventListener('load', () => setTimeout(() => map.invalidateSize(), 100));
+
+  // Capas de tiles (OSM con fallback a Carto si falla)
+  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19});
+  const carto = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {maxZoom:19});
+
+  const tileBadge = document.getElementById('tileStatus');
+  let switched = false;
+
+  osm.on('load', () => { tileBadge.textContent='Tiles OSM OK'; tileBadge.className='badge ok'; });
+  osm.on('tileerror', () => {
+    if (!switched) {
+      switched = true;
+      map.removeLayer(osm);
+      carto.addTo(map);
+      tileBadge.textContent='OSM bloqueado → Carto OK';
+      tileBadge.className='badge warn';
+    }
+  });
+  osm.addTo(map);
+
+  // ==== Routing (OSRM demo público)
+  const router = L.Routing.osrmv1({
+    serviceUrl: 'https://router.project-osrm.org/route/v1',
+    profile: 'car' // demo; para bici real necesitas backend propio
+  });
+
+  const routing = L.Routing.control({
+    router,
+    waypoints: [],
+    routeWhileDragging: true,
+    draggableWaypoints: true,
+    addWaypoints: true,
+    show: false,
+    lineOptions: { styles: [{ color: '#28a745', weight: 5, opacity: 0.9 }] },
+    createMarker: (i, wp, n) => L.marker(wp.latLng, {draggable:true})
+      .bindTooltip(i===0?'Origen':(i===n-1?'Destino':'Intermedio'))
+  }).addTo(map);
+
+  // ==== UI mínima
+  const distEl = document.getElementById('dist');
+  const timeEl = document.getElementById('time');
+  const btnPick = document.getElementById('pick');
+  const btnClear = document.getElementById('clear');
+  const btnSwap  = document.getElementById('swap');
+
+  let picking = false, clicks = 0;
+
+  btnPick.onclick = () => { picking = true; clicks = 0; alert('Clic en el mapa: Origen y luego Destino'); };
+  map.on('click', (e)=>{
+    if (!picking) return;
+    const wps = routing.getWaypoints();
+    if (clicks===0) { wps[0] = new L.Routing.Waypoint(e.latlng); routing.setWaypoints(wps); clicks=1; }
+    else { wps[1] = new L.Routing.Waypoint(e.latlng); routing.setWaypoints(wps); picking=false; clicks=0; }
+  });
+
+  btnClear.onclick = () => { routing.setWaypoints([]); distEl.textContent='—'; timeEl.textContent='—'; };
+  btnSwap.onclick  = () => {
+    const wps = routing.getWaypoints().filter(w => w.latLng);
+    if (wps.length>=2) routing.setWaypoints([wps[wps.length-1], ...wps.slice(1,-1), wps[0]]);
+    else alert('Define origen y destino primero.');
+  };
+
+  routing.on('routesfound', (e) => {
+    const r = e.routes[0];
+    distEl.textContent = (r.summary.totalDistance/1000).toFixed(2)+' km';
+    timeEl.textContent = Math.round(r.summary.totalTime/60)+' min';
+  });
+})();
+</script>
+</body>
+</html>
