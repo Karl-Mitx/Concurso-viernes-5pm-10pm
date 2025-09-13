@@ -15,7 +15,6 @@
       --line:#e5efe7;
     }
 
-    /* Fondo con gradiente + patrón de hojas (SVG inline) */
     body{
       min-height:100vh; margin:0;
       font-family:'Poppins',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
@@ -25,7 +24,6 @@
         radial-gradient(1200px 600px at 10% -10%, rgba(40,167,69,.12) 0, transparent 60%),
         radial-gradient(1200px 600px at 120% 10%, rgba(33,136,56,.10) 0, transparent 55%),
         #f4f8f6;
-      /* patrón */
       background-image:
         url("data:image/svg+xml;utf8,\
         <svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120' fill='none'>\
@@ -107,7 +105,6 @@
 
     .hr-soft{ border-top:1px dashed #cfead8; margin:14px 0 2px; }
 
-    /* Responsivo */
     @media (max-width: 576px){
       .eco-body{ padding:18px; }
       .order-form-input.form-control{ font-size:15px; padding:11px 12px; }
@@ -117,7 +114,6 @@
 <body>
 
   <section class="eco-card">
-    <!-- Encabezado -->
     <div class="eco-header">
       <div class="brand">
         <div class="brand-badge">🌿</div>
@@ -127,7 +123,6 @@
       <div class="leaf-divider"></div>
     </div>
 
-    <!-- Contenido -->
     <div class="eco-body">
       <div class="text-center">
         <h1>Formulario de Compra</h1>
@@ -135,16 +130,17 @@
       </div>
       <hr class="hr-soft"/>
 
-      <form>
+      <!-- Formulario con action y method POST -->
+      <form action="procesar_membresia.php" method="POST">
         <div class="form-row mx-1">
           <div class="col-12 mb-2">
             <label class="order-form-label">Nombre</label>
           </div>
           <div class="col-sm-6 mb-3">
-            <input type="text" class="form-control order-form-input" placeholder="Nombres" required>
+            <input type="text" name="nombres" class="form-control order-form-input" placeholder="Nombres" required>
           </div>
           <div class="col-sm-6 mb-3">
-            <input type="text" class="form-control order-form-input" placeholder="Apellidos" required>
+            <input type="text" name="apellidos" class="form-control order-form-input" placeholder="Apellidos" required>
           </div>
         </div>
 
@@ -153,7 +149,7 @@
             <label class="order-form-label">Correo electrónico</label>
           </div>
           <div class="col-12 mb-3">
-            <input type="email" class="form-control order-form-input" placeholder="ejemplo@correo.com" required>
+            <input type="email" name="correo" class="form-control order-form-input" placeholder="ejemplo@correo.com" required>
           </div>
         </div>
 
@@ -162,7 +158,7 @@
             <label class="order-form-label">Teléfono</label>
           </div>
           <div class="col-12 mb-3">
-            <input type="tel" class="form-control order-form-input" placeholder="+502 0000 0000" required>
+            <input type="tel" name="telefono" class="form-control order-form-input" placeholder="+502 0000 0000" required>
           </div>
         </div>
 
@@ -171,31 +167,31 @@
             <label class="order-form-label">Dirección</label>
           </div>
           <div class="col-12 mb-3">
-            <input type="text" class="form-control order-form-input" placeholder="Calle y número" required>
+            <input type="text" name="direccion" class="form-control order-form-input" placeholder="Calle y número" required>
           </div>
           <div class="col-12 mb-3">
-            <input type="text" class="form-control order-form-input" placeholder="Colonia o zona">
+            <input type="text" name="colonia" class="form-control order-form-input" placeholder="Colonia o zona">
           </div>
         </div>
 
         <div class="form-row mx-1">
           <div class="col-sm-6 mb-3">
-            <input type="text" class="form-control order-form-input" placeholder="Ciudad" required>
+            <input type="text" name="ciudad" class="form-control order-form-input" placeholder="Ciudad" required>
           </div>
           <div class="col-sm-6 mb-3">
-            <input type="text" class="form-control order-form-input" placeholder="Región/Departamento" required>
+            <input type="text" name="region" class="form-control order-form-input" placeholder="Región/Departamento" required>
           </div>
           <div class="col-sm-6 mb-3">
-            <input type="text" class="form-control order-form-input" placeholder="Código Postal">
+            <input type="text" name="codigo_postal" class="form-control order-form-input" placeholder="Código Postal">
           </div>
           <div class="col-sm-6 mb-4">
-            <input type="text" class="form-control order-form-input" placeholder="País" required>
+            <input type="text" name="pais" class="form-control order-form-input" placeholder="País" required>
           </div>
         </div>
 
         <div class="form-row">
           <div class="col-sm-6 text-center mb-2 mb-sm-0">
-            <button type="button" class="btn btn-secondary btn-submit" onclick="window.history.back()">Volver</button>
+            <button type="button" class="btn btn-secondary btn-submit" onclick="window.location.href='home.html'">Volver</button>
           </div>
           <div class="col-sm-6 text-center">
             <button type="submit" class="btn btn-success btn-submit">Comprar 🌱</button>
