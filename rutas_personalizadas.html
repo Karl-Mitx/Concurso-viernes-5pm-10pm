@@ -10,30 +10,114 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css">
 
   <style>
-    html, body { height:100%; margin:0; }
-    #map { height: 90vh; width: 100%; }
-    .ui {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      padding: 6px 8px; background:#fff; border:1px solid #ddd; border-radius:8px;
-      position: fixed; z-index: 9999; top: 10px; left: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.08);
+    :root{
+      --eco:#28a745;
+      --eco-dark:#218838;
+      --ink:#0f1720;
+      --muted:#5b6b72;
+      --panel:#ffffff;
+      --line:#e2efe6;
     }
-    .ui button { padding:6px 10px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:pointer; margin:2px; }
-    .ui button.green { background:#28a745; color:#fff; border-color:#28a745; }
-    .ui button.green:hover { background:#218838; border-color:#218838; }
-    .ui small { color:#666; display:block; margin-top:4px; }
+
+    html, body { height:100%; margin:0; }
+    /* Fondo eco con hojitas suaves */
+    body{
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(40,167,69,.10) 0, transparent 60%),
+        radial-gradient(1200px 600px at 110% 10%, rgba(33,136,56,.10) 0, transparent 55%),
+        #f6faf7;
+      background-image:
+        url("data:image/svg+xml;utf8,\
+        <svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'>\
+          <path d='M18 68c18-10 30-30 34-44c-14 4-34 16-44 34c-2 3 2 8 6 10c3 2 8 2 4 0z' fill='%23cfead8' opacity='.35'/>\
+          <path d='M92 38c-18 10-30 30-34 44c14-4 34-16 44-34c2-3-2-8-6-10c-3-2-8-2-4 0z' fill='%23cfead8' opacity='.28'/>\
+        </svg>");
+      background-size: cover, cover, auto, 120px 120px;
+      background-blend-mode: normal, normal, multiply;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:var(--ink);
+    }
+
+    #map { height: 90vh; width: 100%; border-top:1px solid var(--line); }
+
+    /* Panel UI “glass” eco */
+    .ui {
+      position: fixed; z-index: 9999; top: 14px; left: 14px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,.85);
+      border:1px solid var(--line);
+      border-radius:14px;
+      box-shadow: 0 10px 24px rgba(16,24,32,.12);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      min-width: 280px;
+    }
+    .ui .title{
+      display:flex; align-items:center; gap:10px; font-weight:800; margin-bottom:6px;
+    }
+    .ui .badge{
+      width:28px;height:28px;border-radius:50%;
+      background:linear-gradient(135deg,var(--eco),#6ee7b7);
+      display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;
+      box-shadow:0 6px 14px rgba(40,167,69,.25);
+    }
+
+    .ui .row{
+      display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px 0;
+    }
+
+    .btn {
+      padding:8px 10px; border:1px solid var(--line); border-radius:10px;
+      background:#fff; color:var(--ink); cursor:pointer; font-weight:600;
+      transition:.15s ease; font-size:14px;
+    }
+    .btn:hover{ border-color:#cfead8; background:#fbfffd; }
+    .btn.eco{
+      background:linear-gradient(135deg,var(--eco),var(--eco-dark));
+      border-color:var(--eco); color:#fff; box-shadow:0 10px 20px rgba(40,167,69,.18);
+    }
+    .btn.eco:hover{ filter:brightness(.98); transform:translateY(-1px); }
+    .btn.ghost{ background:#eef8f1; border-color:#d9f1e2; color:#17412b; }
+    .btn.warn{ background:#eef2ff; border-color:#d9dffd; color:#1e2a5c; }
+
+    .ui small { color:var(--muted); display:block; margin-top:4px; line-height:1.3; }
+    .metrics{
+      display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;
+    }
+    .pill{
+      padding:4px 8px; border-radius:999px; font-size:12px; font-weight:700;
+      background:#ecfdf5; color:#155e3a; border:1px solid #bbf7d0;
+    }
+
+    @media (max-width: 540px){
+      .ui{ left: 50%; transform: translateX(-50%); min-width: unset; width: calc(100% - 20px); }
+      #map{ height: 82vh; }
+    }
+
+    /* Color de linea de ruta */
+    .leaflet-routing-container { display:none; } /* ocultar panel default LRM */
+    .leaflet-container a { color: var(--eco-dark); } /* links en popups */
   </style>
 </head>
 <body>
 
 <div class="ui">
-  <div><b>Rutas Leaflet</b></div>
-  <button id="pick" class="green">Seleccionar (Origen → Destino)</button>
-  <button id="clear">Limpiar</button>
-  <button id="swap">Invertir</button>
-  <button id="myloc">Usar mi ubicación</button>
-    <button type="button" class="btn btn-secondary btn-submit" onclick="window.history.back();">Volver</button>
-  <small>Distancia: <span id="dist">—</span> · Tiempo: <span id="time">—</span></small>
-  <small>Tip: clic izq. para origen/destino · clic derecho para intermedio · “Usar mi ubicación” solo indica</small>
+  <div class="title">
+    <div class="badge">🌿</div>
+    <div>Rutas EcoBici</div>
+  </div>
+  <div class="row">
+    <button id="pick" class="btn eco" title="Definir origen y destino con clic">Seleccionar (Origen → Destino)</button>
+    <button id="swap" class="btn" title="Invertir origen/destino">Invertir</button>
+    <button id="clear" class="btn ghost" title="Limpiar ruta">Limpiar</button>
+    <button id="myloc" class="btn warn" title="Marcar tu ubicación (solo referencia)">Mi ubicación</button>
+    <button id="back" class="btn" title="Volver">Volver</button>
+  </div>
+  <div class="metrics">
+    <span class="pill">Distancia: <span id="dist">—</span></span>
+    <span class="pill">Tiempo: <span id="time">—</span></span>
+  </div>
+  <small>Tip: clic izquierdo = origen/destino • clic derecho = punto intermedio • “Mi ubicación” no fija la ruta</small>
 </div>
 
 <div id="map"></div>
@@ -47,13 +131,13 @@
   // ===== Mapa base
   const CENTER = [15.726, -88.605]; // Puerto Barrios
   const map = L.map('map').setView(CENTER, 14);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-  window.addEventListener('load', () => setTimeout(() => map.invalidateSize(), 100));
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map);
+  window.addEventListener('load', () => setTimeout(() => map.invalidateSize(), 120));
 
   // ===== Routing (OSRM demo público)
   const router = L.Routing.osrmv1({
     serviceUrl: 'https://router.project-osrm.org/route/v1',
-    profile: 'car' // demo; para bici real -> backend propio
+    profile: 'car' // demo; para bici real -> backend propio (OSRM bike / Valhalla)
   });
 
   const routing = L.Routing.control({
@@ -64,6 +148,7 @@
     addWaypoints: true,
     show: false,
     lineOptions: { styles: [{ color: '#28a745', weight: 5, opacity: 0.9 }] },
+    altLineOptions: { styles: [{ color: '#9ca3af', weight: 4, opacity: 0.6 }] },
     createMarker: (i, wp, n) => L.marker(wp.latLng, {draggable:true})
       .bindTooltip(i===0?'Origen':(i===n-1?'Destino':'Intermedio'))
   }).addTo(map);
@@ -75,11 +160,16 @@
   const btnClear = document.getElementById('clear');
   const btnSwap  = document.getElementById('swap');
   const btnMyLoc = document.getElementById('myloc');
+  const btnBack  = document.getElementById('back');
 
   let picking = false, clicks = 0;
 
   // ===== Selección Origen/Destino (clic izquierdo)
-  btnPick.addEventListener('click', () => { picking = true; clicks = 0; alert('Clic en el mapa: Origen y luego Destino'); });
+  btnPick.addEventListener('click', () => {
+    picking = true; clicks = 0;
+    alert('Clic en el mapa: primero Origen y luego Destino.');
+  });
+
   map.on('click', (e) => {
     if (!picking) return;
     const wps = routing.getWaypoints();
@@ -90,8 +180,7 @@
     } else {
       wps[1] = new L.Routing.Waypoint(e.latlng);
       routing.setWaypoints(wps);
-      picking = false;
-      clicks = 0;
+      picking = false; clicks = 0;
     }
   });
 
@@ -130,27 +219,22 @@
       pos => {
         const latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
         const acc = pos.coords.accuracy || 30;
-
-        // centrar mapa
         map.setView(latlng, 15);
 
-        // marcador azul (referencia) + círculo de precisión
         if (!myMarker) {
           myMarker = L.circleMarker(latlng, { radius: 8, color:'#1e90ff', fillColor:'#1e90ff', fillOpacity:0.9 })
             .addTo(map).bindPopup('Tu ubicación (referencia)');
-        } else {
-          myMarker.setLatLng(latlng);
-        }
+        } else { myMarker.setLatLng(latlng); }
         if (!myCircle) {
           myCircle = L.circle(latlng, { radius: acc, color:'#1e90ff', fillColor:'#1e90ff', fillOpacity:0.1, weight:1 }).addTo(map);
-        } else {
-          myCircle.setLatLng(latlng); myCircle.setRadius(acc);
-        }
-        // NO tocamos routing.setWaypoints(): es solo referencia visual
+        } else { myCircle.setLatLng(latlng); myCircle.setRadius(acc); }
       },
       err => alert('No se pudo obtener la ubicación.')
     );
   });
+
+  // ===== Volver
+  btnBack.addEventListener('click', () => { window.history.back(); });
 
   // ===== Métricas
   routing.on('routesfound', (e) => {
