@@ -146,34 +146,77 @@ $nombreCorto = $usuario && !empty($usuario['nombre']) ? explode(' ', trim($usuar
   </div>
 
   <!-- Navbar -->
-  <div class="container-fluid position-relative nav-bar p-0">
-    <div class="container-lg position-relative p-0 px-lg-3" style="z-index: 9;">
-      <nav class="navbar navbar-expand-lg navbar-light shadow-lg py-2 py-lg-2 px-3">
-        <a href="home.php" class="navbar-brand">
-          <h1 class="m-0 text-primary"><span class="text-dark">Eco</span>Bici</h1>
-        </a>
-        <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navbarCollapse">
-          <span class="navbar-toggler-icon"></span>
-        </button>
+<div class="container-fluid position-relative nav-bar p-0">
+  <div class="container-lg position-relative p-0 px-lg-3" style="z-index:9;">
+    <nav class="navbar navbar-expand-lg navbar-light shadow-lg py-2 py-lg-2 px-3">
+      <a href="home.php" class="navbar-brand">
+        <h1 class="m-0 text-primary"><span class="text-dark">Eco</span>Bici</h1>
+      </a>
 
-        <div class="collapse navbar-collapse justify-content-between" id="navbarCollapse">
-          <div class="navbar-nav ml-auto py-0 align-items-lg-center">
-            <a href="home.php" class="nav-item nav-link active">Inicio</a>
-            <a href="estaciones.html" class="nav-item nav-link">Estaciones de Bicicletas</a>
-            <a href="rutas_personalizadas.html" class="nav-item nav-link">Rutas Personalizadas</a>
-            <a href="CO2.html" class="nav-item nav-link">Cálculo de CO₂</a>
-            <a href="selecbici.php" class="nav-item nav-link">Selección de Bicicleta</a>
-            <a href="historico_uso.php" class="nav-item nav-link">Bicletas Registradas</a>
-            <a href="reportes.php" class="nav-item nav-link">Reportes</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse"
+              data-target="#navbarCollapse" aria-controls="navbarCollapse"
+              aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse justify-content-between" id="navbarCollapse">
+        <div class="navbar-nav ml-auto py-0 align-items-lg-center">
+
+          <!-- Ítems visibles -->
+          <a href="home.php" class="nav-item nav-link active">Inicio</a>
+          <a href="estaciones.html" class="nav-item nav-link">Estaciones de Bicicletas</a>
+          <a href="rutas_personalizadas.html" class="nav-item nav-link">Rutas Personalizadas</a>
+          <a href="CO2.html" class="nav-item nav-link">Cálculo de CO₂</a>
+          <a href="selecbici.php" class="nav-item nav-link">Selección de Bicicleta</a>
+
+          <!-- Dropdown "Más" con las 3 últimas -->
+          <div class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="moreMenu" role="button"
+               data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              Más
+            </a>
+            <div class="dropdown-menu dropdown-menu-right" aria-labelledby="moreMenu">
+              <a class="dropdown-item" href="historico_uso.php">Bicicletas Registradas</a>
+              <a class="dropdown-item" href="reportes.php">Reportes</a>
+            </div>
+          </div>
+
+          <!-- Cuenta / Avatar (opcional) -->
+          <div class="nav-item dropdown account-dropdown ml-lg-2">
+            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="accountDropdown"
+               data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              <span class="avatar mr-2"><img src="<?= htmlspecialchars($avatar) ?>" alt="avatar"></span>
+              <span class="account-name"><?= htmlspecialchars($nombreCorto) ?></span>
+            </a>
+            <div class="dropdown-menu dropdown-menu-right shadow-sm" aria-labelledby="accountDropdown">
+              <?php if ($usuario): ?>
+                <span class="dropdown-item-text small text-muted">
+                  Conectado como <b><?= htmlspecialchars($usuario['email']) ?></b>
+                </span>
+                <div class="dropdown-divider"></div>
+                <a class="dropdown-item" href="principal.php"><i class="far fa-user mr-2"></i> Panel</a>
+                <a class="dropdown-item" href="comprar_membresia.php"><i class="far fa-id-badge mr-2"></i> Membresía</a>
+                <a class="dropdown-item" href="selecbici.php"><i class="fas fa-bicycle mr-2"></i> Alquilar bicicletas</a>
+                <?php if (!empty($usuario['rol']) && strtolower($usuario['rol'])==='admin'): ?>
+                  <div class="dropdown-divider"></div>
+                  <a class="dropdown-item" href="catalogo.php"><i class="fas fa-users-cog mr-2"></i> Admin: Usuarios</a>
+                <?php endif; ?>
+                <div class="dropdown-divider"></div>
+                <a class="dropdown-item text-danger" href="logout.php"><i class="fas fa-sign-out-alt mr-2"></i> Cerrar sesión</a>
+              <?php else: ?>
+                <a class="dropdown-item" href="index.php"><i class="fas fa-sign-in-alt mr-2"></i> Iniciar sesión</a>
+                <a class="dropdown-item" href="registro.php"><i class="far fa-user-plus mr-2"></i> Crear cuenta</a>
+              <?php endif; ?>
+            </div>
+          </div>
+          <!-- /Cuenta -->
+
+        </div>
+      </div>
+    </nav>
 
 
-            <!-- Cuenta / Avatar -->
-            <div class="nav-item dropdown account-dropdown ml-lg-3">
-              <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="accountDropdown"
-                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                <span class="avatar mr-2"><img src="<?= htmlspecialchars($avatar) ?>" alt="avatar"></span>
-                <span class="account-name"><?= htmlspecialchars($nombreCorto) ?></span>
-              </a>
+            
               <div class="dropdown-menu dropdown-menu-right shadow-sm" aria-labelledby="accountDropdown">
                 <?php if ($usuario): ?>
                   <span class="dropdown-item-text small text-muted">
