@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EcoBici • Estaciones (base funcional)</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- MarkerCluster -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <!-- Leaflet Routing Machine (para “Ruta desde mi ubicación”) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css">
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+
+  <style>
+    :root{
+      --eco:#28a745; --eco-dark:#218838; --ink:#0f1720; --muted:#5b6b72; --panel:#ffffff; --line:#e2efe6;
+    }
+
+    /* === Misma receta que la de Rutas para evitar “mapa blanco” === */
+    html, body { height:100%; margin:0; }
+    body{
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(40,167,69,.10) 0, transparent 60%),
+        radial-gradient(1200px 600px at 110% 10%, rgba(33,136,56,.10) 0, transparent 55%),
+        #f6faf7;
+      background-image:
+        url("data:image/svg+xml;utf8,\
+        <svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'>\
+          <path d='M18 68c18-10 30-30 34-44c-14 4-34 16-44 34c-2 3 2 8 6 10c3 2 8 2 4 0z' fill='%23cfead8' opacity='.35'/>\
+          <path d='M92 38c-18 10-30 30-34 44c14-4 34-16 44-34c2-3-2-8-6-10c-3-2-8-2-4 0z' fill='%23cfead8' opacity='.28'/>\
+        </svg>");
+      background-size: cover, cover, auto 120px;
+      background-blend-mode: normal, normal, multiply;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:var(--ink);
+    }
+
+    #map { height: 90vh; width: 100%; border-top:1px solid var(--line); }
+
+    /* Panel UI igual que en Rutas */
+    .ui {
+      position: fixed; z-index: 9999; top: 14px; left: 14px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,.85);
+      border:1px solid var(--line);
+      border-radius:14px;
+      box-shadow: 0 10px 24px rgba(16,24,32,.12);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      min-width: 300px;
+    }
+    .ui .title{ display:flex; align-items:center; gap:10px; font-weight:800; margin-bottom:6px; }
+    .ui .badge{
+      width:28px;height:28px;border-radius:50%;
+      background:linear-gradient(135deg,var(--eco),#6ee7b7);
+      display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;
+      box-shadow:0 6px 14px rgba(40,167,69,.25);
+    }
+    .ui .row{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 4px 0; }
+    .ui small { color:var(--muted); display:block; margin-top:6px; line-height:1.3; }
+
+    .btn {
+      padding:8px 10px; border:1px solid var(--line); border-radius:10px;
+      background:#fff; color:var(--ink); cursor:pointer; font-weight:600;
+      transition:.15s ease; font-size:14px;
+    }
+    .btn:hover{ border-color:#cfead8; background:#fbfffd; }
+    .btn.eco{
+      background:linear-gradient(135deg,var(--eco),var(--eco-dark));
+      border-color:var(--eco); color:#fff; box-shadow:0 10px 20px rgba(40,167,69,.18);
+    }
+    .btn.eco:hover{ filter:brightness(.98); transform:translateY(-1px); }
+    .btn.ghost{ background:#eef8f1; border-color:#d9f1e2; color:#17412b; }
+    .btn.warn{ background:#eef2ff; border-color:#d9dffd; color:#1e2a5c; }
+
+    .field{ display:flex; gap:6px; }
+    .field input, .field select{
+      flex:1; padding:8px 10px; border:1px solid #cfead8; border-radius:10px;
+      background:#fbfffd; outline:0; font-size:14px;
+    }
+    .field input:focus, .field select:focus{ border-color:var(--eco); box-shadow:0 0 0 4px rgba(40,167,69,.12); }
+
+    .leaflet-routing-container { display:none; } /* ocultar panel de LRM */
+    @media (max-width: 560px){
+      .ui{ left:50%; transform: translateX(-50%); width: calc(100% - 20px); min-width: unset; }
+      #map{ height: 82vh; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="ui">
+  <div class="title">
+    <div class="badge">📍</div>
+    <div>Estaciones EcoBici</div>
+  </div>
+
+  <div class="field">
+    <input id="q" type="search" placeholder="Buscar por nombre/dirección/ID…">
+  </div>
+
+  <div class="row">
+    <select id="type">
+      <option value="">Tipo (todos)</option>
+      <option value="dock">Con puerto (dock)</option>
+      <option value="free">Libre (free-floating)</option>
+    </select>
+    <select id="status">
+      <option value="">Estado (todos)</option>
+      <option value="operativa">Operativa</option>
+      <option value="mantenimiento">Mantenimiento</option>
+      <option value="fuera">Fuera de servicio</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <button id="useLoc" class="btn warn">Mi ubicación</button>
+    <button id="nearest" class="btn">Más cercana</button>
+    <button id="addMode" class="btn eco">Añadir con clic</button>
+    <button id="clearAdd" class="btn ghost">Cancelar alta</button>
+  </div>
+
+  <div class="row">
+    <button id="export" class="btn">Exportar GeoJSON</button>
+    <label for="import" class="btn">Importar GeoJSON</label>
+    <input id="import" type="file" accept=".geojson,.json,application/geo+json" style="display:none">
+    <button id="saveLocal" class="btn ghost">Guardar local</button>
+    <button id="loadLocal" class="btn ghost">Cargar local</button>
+  </div>
+
+  <div class="row">
+    <button id="back" class="btn">Volver</button>
+  </div>
+
+  <small>
+    • Si no ves el mapa, revisa que este archivo no esté dentro de un contenedor oculto y que <b>#map</b> tenga altura (90vh).<br>
+    • “Mi ubicación” es referencia visual; la ruta se traza desde allí a la estación que elijas.
+  </small>
+</div>
+
+<div id="map"></div>
+
+<script>
+(function(){
+  // ===== Centro: Puerto Barrios
+  const CENTER = [15.726, -88.605];
+
+  // ===== Mapa base (misma receta que en Rutas)
+  const map = L.map('map').setView(CENTER, 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19, attribution:'&copy; OpenStreetMap'
+  }).addTo(map);
+  // Fix de render “en blanco” si el contenedor se monta después
+  window.addEventListener('load', () => setTimeout(() => map.invalidateSize(), 120));
+
+  // ===== Dataset de ejemplo (reemplaza por tus puntos reales)
+  const STATIONS_SEED = [
+    {id:'PB-001', name:'Parque Reina Barrios', address:'Parque Reina Barrios',   lat:15.734115714264632, lng:-88.59640771856829, type:'dock', status:'operativa', bikes:8, docks:16},
+    {id:'PB-002', name:'Malecón',        address:'Zona costera',      lat:15.735955217882168,  lng:-88.60457039957747, type:'dock', status:'operativa', bikes:5, docks:12},
+    {id:'PB-003', name:'UMG Ing. en Sistemas.',     address:'Universidad',      lat:15.722542768820537,  lng:-88.58407908788135, type:'dock', status:'mantenimiento', bikes:2, docks:10},
+    {id:'PB-005', name:'Mercado',        address:'Municipal',        lat:15.726896574548048,  lng:-88.59800524370179, type:'free', status:'operativa', bikes:12, docks:0},
+    {id:'PB-006', name:'Estadio',        address:'Estadio local',    lat:15.725680712056022, lng:-88.59455700137364, type:'dock', status:'operativa', bikes:4, docks:12}
+  ];
+  let STATIONS = JSON.parse(localStorage.getItem('ecobici_stations') || 'null') || STATIONS_SEED.slice();
+
+  // ===== Clúster de marcadores
+  const cluster = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnMaxZoom:true });
+  map.addLayer(cluster);
+
+  // Índice id -> marker
+  const markerIndex = new Map();
+
+  function colorByStatus(s){ return s==='operativa' ? '#16a34a' : (s==='mantenimiento' ? '#f59e0b' : '#ef4444'); }
+  function icon(type, status){
+    const bg = colorByStatus(status);
+    const txt = type==='dock' ? 'D' : 'F';
+    return L.divIcon({
+      className:'station-ico',
+      html:`<div style="--bg:${bg}; width:26px;height:26px;border-radius:8px;background:var(--bg);
+        display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;
+        box-shadow:0 4px 10px rgba(0,0,0,.2)">${txt}</div>`,
+      iconSize:[26,26], iconAnchor:[13,13]
+    });
+  }
+
+  function popupHtml(s){
+    return `
+      <b>${s.name}</b><br>
+      <small>${s.address||''}</small><br>
+      <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap">
+        <span style="font-size:11px;border:1px solid #cfead8;border-radius:999px;padding:2px 8px;background:#ecfdf5;color:#155e3a">ID ${s.id}</span>
+        <span style="font-size:11px;border:1px solid #cfead8;border-radius:999px;padding:2px 8px;background:#ecfdf5;color:#155e3a">${s.type==='dock'?'Dock':'Libre'}</span>
+        <span style="font-size:11px;border:1px solid ${colorByStatus(s.status)};border-radius:999px;padding:2px 8px;background:#fff;color:#111">Estado: ${s.status}</span>
+        <span style="font-size:11px;border:1px solid #cfead8;border-radius:999px;padding:2px 8px;background:#ecfdf5;color:#155e3a">Bicis: ${s.bikes}</span>
+        <span style="font-size:11px;border:1px solid #cfead8;border-radius:999px;padding:2px 8px;background:#ecfdf5;color:#155e3a">Docks: ${s.docks}</span>
+      </div>
+      <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap">
+        <button onclick="routeTo('${s.id}')" style="padding:8px 10px;border-radius:10px;border:1px solid #28a745;background:#28a745;color:#fff;cursor:pointer">Ruta desde mi ubicación</button>
+        <button onclick="centerOn('${s.id}')" style="padding:8px 10px;border-radius:10px;border:1px solid #d9f1e2;background:#eef8f1;color:#17412b;cursor:pointer">Centrar</button>
+        <button onclick="copyCoords(${s.lat},${s.lng})" style="padding:8px 10px;border-radius:10px;border:1px solid #e6e6e6;background:#fff;cursor:pointer">Copiar coords</button>
+      </div>
+    `;
+  }
+
+  function rebuildMarkers(list=STATIONS){
+    cluster.clearLayers(); markerIndex.clear();
+    list.forEach(s=>{
+      const m = L.marker([s.lat, s.lng], { icon: icon(s.type, s.status), title: s.name });
+      m.bindPopup(popupHtml(s));
+      cluster.addLayer(m);
+      markerIndex.set(s.id, m);
+    });
+  }
+  rebuildMarkers();
+
+  // ===== Búsqueda + filtros
+  const $ = s => document.querySelector(s);
+  function applyFilters(){
+    const q = ($('#q').value||'').toLowerCase();
+    const type = $('#type').value;
+    const status = $('#status').value;
+    const list = STATIONS.filter(s=>{
+      const text = (s.name+' '+(s.address||'')+' '+s.id).toLowerCase();
+      if (q && !text.includes(q)) return false;
+      if (type && s.type!==type) return false;
+      if (status && s.status!==status) return false;
+      return true;
+    });
+    rebuildMarkers(list);
+  }
+  ['q','type','status'].forEach(id => document.getElementById(id).addEventListener('input', applyFilters));
+
+  // ===== Mi ubicación (referencia)
+  let myMarker = null, myCircle = null, myLatLng = null;
+  $('#useLoc').addEventListener('click', ()=>{
+    if (!navigator.geolocation) return alert('Geolocalización no soportada.');
+    navigator.geolocation.getCurrentPosition(pos=>{
+      const latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+      myLatLng = latlng;
+      const acc = pos.coords.accuracy || 30;
+      map.setView(latlng, 15);
+
+      if (!myMarker) {
+        myMarker = L.circleMarker(latlng, { radius:8, color:'#1e90ff', fillColor:'#1e90ff', fillOpacity:0.9 }).addTo(map).bindPopup('Tu ubicación');
+        myCircle = L.circle(latlng, { radius: acc, color:'#1e90ff', fillColor:'#1e90ff', fillOpacity:0.1, weight:1 }).addTo(map);
+      } else {
+        myMarker.setLatLng(latlng);
+        myCircle.setLatLng(latlng).setRadius(acc);
+      }
+      myMarker.openPopup();
+    }, _=> alert('No se pudo obtener tu ubicación.'));
+  });
+
+  // ===== Estación más cercana
+  function haversine(a,b){
+    const R=6371e3, toRad = d => d*Math.PI/180;
+    const dLat = toRad(b.lat-a.lat), dLng = toRad(b.lng-a.lng);
+    const A = Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+    return 2*R*Math.asin(Math.sqrt(A));
+  }
+  $('#nearest').addEventListener('click', ()=>{
+    if (!myLatLng) return alert('Primero presiona “Mi ubicación”.');
+    let best=null, dMin=Infinity;
+    STATIONS.forEach(s=>{
+      const d = haversine({lat:myLatLng.lat,lng:myLatLng.lng},{lat:s.lat,lng:s.lng});
+      if (d<dMin){ dMin=d; best=s; }
+    });
+    if (!best) return;
+    alert(`Estación más cercana: ${best.name} (${(dMin/1000).toFixed(2)} km)`);
+    centerOn(best.id);
+  });
+
+  // ===== Routing a estación (OSRM demo público)
+  let routingControl = null;
+  window.routeTo = (id)=>{
+    if (!myLatLng) return alert('Primero presiona “Mi ubicación”.');
+    const s = STATIONS.find(x=> x.id===id); if(!s) return;
+    if (routingControl){ map.removeControl(routingControl); routingControl = null; }
+    routingControl = L.Routing.control({
+      router: L.Routing.osrmv1({ serviceUrl:'https://router.project-osrm.org/route/v1', profile:'car' }),
+      waypoints: [ myLatLng, L.latLng(s.lat, s.lng) ],
+      show:false, collapsible:true,
+      lineOptions:{ styles:[{color:'#28a745', weight:6, opacity:0.9}] },
+      routeWhileDragging:false, addWaypoints:false, draggableWaypoints:false
+    }).addTo(map);
+  };
+
+  // ===== Centrar y copiar coords
+  window.centerOn = (id)=>{
+    const m = markerIndex.get(id); if (!m) return;
+    map.setView(m.getLatLng(), 17); m.openPopup();
+  };
+  window.copyCoords = (lat,lng)=>{
+    (navigator.clipboard?.writeText(`${lat.toFixed(6)}, ${lng.toFixed(6)}`) || Promise.resolve())
+      .then(()=> alert('Coordenadas copiadas.'));
+  };
+
+  // ===== Alta con clic
+  let addMode = false;
+  $('#addMode').addEventListener('click', ()=>{ addMode = true; alert('Modo alta: clic en el mapa para crear una estación.'); });
+  $('#clearAdd').addEventListener('click', ()=> addMode=false);
+  map.on('click', (e)=>{
+    if (!addMode) return;
+    const id = prompt('ID (ej. PB-007):'); if (!id) return;
+    const name = prompt('Nombre visible:', 'Nueva estación') || 'Nueva estación';
+    const type = prompt('Tipo: dock / free', 'dock')==='free'?'free':'dock';
+    const status = prompt('Estado: operativa / mantenimiento / fuera', 'operativa') || 'operativa';
+    const bikes = Number(prompt('Bicis disponibles:', '4') || 0);
+    const docks = type==='dock' ? Number(prompt('Docks totales:', '10') || 0) : 0;
+    const address = prompt('Dirección/nota:', '') || '';
+    STATIONS.push({ id, name, address, lat:e.latlng.lat, lng:e.latlng.lng, type, status, bikes, docks });
+    addMode = false;
+    applyFilters();
+  });
+
+  // ===== Exportar / Importar / LocalStorage
+  function toGeoJSON(){
+    return {
+      type:'FeatureCollection',
+      features: STATIONS.map(s=>({
+        type:'Feature',
+        properties:{ id:s.id, name:s.name, address:s.address, type:s.type, status:s.status, bikes:s.bikes, docks:s.docks },
+        geometry:{ type:'Point', coordinates:[s.lng, s.lat] }
+      }))
+    };
+  }
+  function download(content, name, type){
+    const blob = new Blob([content], {type});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download=name; a.click();
+    URL.revokeObjectURL(url);
+  }
+  $('#export').addEventListener('click', ()=> download(JSON.stringify(toGeoJSON(),null,2), 'ecobici_estaciones.geojson', 'application/geo+json'));
+  $('#import').addEventListener('change', (e)=>{
+    const f = e.target.files[0]; if (!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const gj = JSON.parse(reader.result);
+        if (gj.type!=='FeatureCollection') throw new Error('GeoJSON inválido');
+        STATIONS = gj.features.map(ft => ({
+          id: ft.properties.id || ('ST_'+Math.random().toString(36).slice(2,8)),
+          name: ft.properties.name || 'Estación',
+          address: ft.properties.address || '',
+          type: ft.properties.type==='free'?'free':'dock',
+          status: ft.properties.status || 'operativa',
+          bikes: Number(ft.properties.bikes||0),
+          docks: Number(ft.properties.docks||0),
+          lat: ft.geometry.coordinates[1],
+          lng: ft.geometry.coordinates[0],
+        }));
+        applyFilters();
+        alert('Importado correctamente.');
+      }catch(err){ alert('Error al importar: '+err.message); }
+      e.target.value = '';
+    };
+    reader.readAsText(f);
+  });
+  $('#saveLocal').addEventListener('click', ()=> { localStorage.setItem('ecobici_stations', JSON.stringify(STATIONS)); alert('Guardado local.'); });
+  $('#loadLocal').addEventListener('click', ()=> {
+    const d = JSON.parse(localStorage.getItem('ecobici_stations') || 'null');
+    if (!d) return alert('No hay guardado local.');
+    STATIONS = d; applyFilters();
+  });
+
+  // ===== Volver
+  document.getElementById('back').addEventListener('click', ()=> window.history.back());
+
+  // Init
+  applyFilters();
+})();
+</script>
+</body>
+</html>
