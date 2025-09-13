@@ -1,0 +1,526 @@
+<?php
+// selecbici.php
+require 'conexion.php';
+session_start();
+
+// Bloquea si no hay sesión
+$u = $_SESSION['usuario'] ?? null;
+if (!$u) { header('Location: index.php'); exit; }
+
+// Cargar membresía del usuario
+function getMembresiaByUser(mysqli $mysqli, int $uid) {
+  $stmt = $mysqli->prepare("SELECT tipo, inicio, fin, estado FROM membresias WHERE usuario_id=? LIMIT 1");
+  $stmt->bind_param('i', $uid);
+  $stmt->execute();
+  $res = $stmt->get_result();
+  $row = $res->fetch_assoc() ?: null;
+  $stmt->close();
+  return $row;
+}
+$m = getMembresiaByUser($mysqli, (int)$u['id']);
+
+// Calcular si está vigente
+$membershipActive = false;
+$membershipUntil  = '';
+if ($m && $m['estado'] === 'activa' && !empty($m['fin'])) {
+  try {
+    $hoy = new DateTime('today');
+    $fin = new DateTime($m['fin']);
+    if ($fin >= $hoy) { $membershipActive = true; $membershipUntil = $fin->format('Y-m-d'); }
+  } catch (Exception $e) { /* noop */ }
+}
+?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>EcoBici • Tienda de Bicicletas</title>
+  <style>
+    :root{
+      --eco:#28a745; --eco2:#218838; --ink:#0f1720; --muted:#5b6b72; --line:#e2efe6; --panel:#ffffff; --bg:#f6faf7;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%}
+    body{
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; color:var(--ink); background:var(--bg);
+      background:
+        radial-gradient(1200px 600px at -10% -20%, rgba(40,167,69,.10) 0, transparent 60%),
+        radial-gradient(1200px 600px at 110% 20%, rgba(33,136,56,.10) 0, transparent 55%),
+        var(--bg);
+      min-height:100%;
+      display:flex; flex-direction:column;
+    }
+    header{
+      position:sticky; top:0; z-index:50;
+      background:#ffffffd6; backdrop-filter: blur(8px);
+      border-bottom:1px solid var(--line);
+    }
+    .topbar{
+      max-width:1200px; margin:auto; padding:10px 14px; display:flex; align-items:center; gap:12px;
+    }
+    .brand{display:flex; align-items:center; gap:10px; font-weight:900; font-size:18px}
+    .badge{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--eco),#6ee7b7);color:#fff;box-shadow:0 8px 18px rgba(40,167,69,.25)}
+    .spacer{flex:1}
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      border:1px solid #d9f1e2; background:#eef8f1; color:#17412b; padding:8px 10px; border-radius:999px; cursor:pointer; font-weight:700
+    }
+    .pill.eco{ background:linear-gradient(135deg,var(--eco),var(--eco2)); color:#fff; border-color:var(--eco); box-shadow:0 10px 20px rgba(40,167,69,.18) }
+    .pill.eco:hover{ filter:brightness(.98) }
+    .cart-count{background:#fff;color:#17412b;border:1px solid #cfead8;border-radius:999px;padding:2px 8px;font-size:12px}
+
+    .toolbar{
+      max-width:1200px; margin:8px auto; padding:0 14px 12px; display:grid; gap:10px;
+      grid-template-columns: 1.2fr 1fr 1fr 1fr;
+    }
+    @media (max-width:900px){ .toolbar{grid-template-columns:1fr 1fr; } }
+    .control{display:flex; gap:8px; align-items:center}
+    input[type="search"], select, input[type="number"]{
+      width:100%; padding:10px 12px; border:1px solid #cfead8; border-radius:10px; background:#fbfffd; outline:0; font-size:14px;
+    }
+    input:focus,select:focus{border-color:var(--eco); box-shadow:0 0 0 4px rgba(40,167,69,.12)}
+    .checks{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    label.small{font-size:12px; color:#244235; display:flex; align-items:center; gap:6px}
+
+    main{max-width:1200px; margin:0 auto; padding:6px 14px 20px; width:100%}
+    .grid{display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:12px}
+    @media (max-width:1100px){ .grid{grid-template-columns: repeat(3, minmax(0,1fr));} }
+    @media (max-width:760px){ .grid{grid-template-columns: repeat(2, minmax(0,1fr));} }
+    @media (max-width:460px){ .grid{grid-template-columns: 1fr;} }
+
+    .card{
+      background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; display:flex; flex-direction:column;
+      transition:transform .08s ease, box-shadow .08s ease;
+    }
+    .card:hover{ transform: translateY(-2px); box-shadow:0 12px 28px rgba(0,0,0,.08) }
+    .thumb{ width:100%; aspect-ratio: 4/3; object-fit:cover; background:#eaf7ef }
+    .info{ padding:12px; display:flex; flex-direction:column; gap:6px }
+    .name{ font-weight:800; line-height:1.2 }
+    .tags{ display:flex; gap:6px; flex-wrap:wrap }
+    .tag{ font-size:11px; padding:3px 8px; border:1px solid #cfead8; border-radius:999px; background:#f0fff7; color:#155e3a }
+    .row{ display:flex; align-items:center; justify-content:space-between; gap:8px }
+    .price{ font-weight:900 }
+    .str{ color:#a7b7b0; text-decoration:line-through; font-weight:600; margin-left:6px }
+    .stars{ color:#ffb703; font-size:13px }
+    .actions{ display:flex; gap:8px; margin-top:6px }
+    .btn{
+      flex:1; padding:10px 10px; border-radius:10px; border:1px solid #d9f1e2; background:#eef8f1; color:#17412b; font-weight:700; cursor:pointer;
+    }
+    .btn.eco{ background:linear-gradient(135deg,var(--eco),var(--eco2)); border-color:var(--eco); color:#fff }
+    .btn.ghost{ background:#fff; border:1px solid #e6e6e6; color:#333 }
+
+    footer{padding:14px; text-align:center; color:var(--muted); font-size:12px}
+
+    /* Cart drawer */
+    .drawer{
+      position:fixed; right:0; top:0; bottom:0; width:360px; max-width:100vw; background:#fff; border-left:1px solid var(--line); z-index:60;
+      transform: translateX(100%); transition: transform .2s ease;
+      display:flex; flex-direction:column;
+      box-shadow: -10px 0 30px rgba(0,0,0,.08);
+    }
+    .drawer.open{ transform: translateX(0) }
+    .drawer header{ position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:12px }
+    .drawer .content{ padding:12px; overflow:auto; flex:1; display:flex; flex-direction:column; gap:10px }
+    .item{ display:grid; grid-template-columns:64px 1fr auto; gap:8px; align-items:center; border:1px solid #eff6f0; border-radius:10px; padding:8px }
+    .item img{ width:64px; height:64px; object-fit:cover; border-radius:8px; background:#eaf7ef }
+    .qty{ display:flex; align-items:center; gap:6px }
+    .qty button{ width:26px; height:26px; border-radius:7px; border:1px solid #d9f1e2; background:#eef8f1; cursor:pointer; font-weight:800 }
+    .drawer footer{ border-top:1px solid var(--line); padding:12px; display:grid; gap:8px }
+    .line{ display:flex; justify-content:space-between; align-items:center }
+    .total{ font-weight:900; font-size:18px }
+
+    /* Modal */
+    .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:70; padding:16px }
+    .overlay.open{ display:flex }
+    .modal{ background:#fff; border-radius:14px; border:1px solid var(--line); max-width:860px; width:100%; overflow:hidden }
+    .modal .body{ display:grid; grid-template-columns: 1.2fr 1fr; gap:0 }
+    @media (max-width:820px){ .modal .body{ grid-template-columns: 1fr } }
+    .m-img{ width:100%; height:100%; object-fit:cover; background:#eaf7ef; aspect-ratio:4/3 }
+    .m-info{ padding:14px; display:flex; flex-direction:column; gap:10px }
+
+    /* Helpers */
+    .hide{display:none}
+    .member {border:1px solid #bbf7d0;background:#ecfdf5;color:#14532d}
+    .danger {border:1px solid #ffd6d6;background:#fff1f1;color:#7a1f1f}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="topbar">
+    <div class="brand">
+      <div class="badge">🚲</div>
+      <div>EcoBici • Tienda</div>
+    </div>
+    <button id="btnBack" class="pill">← Volver</button>
+    <div class="spacer"></div>
+
+    <?php if ($membershipActive): ?>
+      <span class="pill member">🌿 Membresía activa · vence: <?= htmlspecialchars($membershipUntil) ?></span>
+    <?php else: ?>
+      <a class="pill danger" href="comprar_membresia.php">❗ Sin membresía · Comprar</a>
+    <?php endif; ?>
+
+    <button id="btnCart" class="pill eco">🛒 Carrito <span id="cartCount" class="cart-count">0</span></button>
+  </div>
+
+  <div class="toolbar">
+    <div class="control"><input type="search" id="q" placeholder="Buscar (modelo, etiqueta, uso)"></div>
+    <div class="control">
+      <select id="type">
+        <option value="">Tipo (todos)</option>
+        <option value="urbana">Urbana</option>
+        <option value="hibrida">Híbrida</option>
+        <option value="mtb">MTB</option>
+        <option value="ruta">Ruta</option>
+        <option value="gravel">Gravel</option>
+        <option value="plegable">Plegable</option>
+        <option value="cargo">De Carga</option>
+        <option value="ebike">Eléctrica</option>
+      </select>
+      <select id="terrain">
+        <option value="">Terreno (todos)</option>
+        <option value="asfalto">Asfalto</option>
+        <option value="mixto">Mixto</option>
+        <option value="tierra">Tierra</option>
+      </select>
+    </div>
+    <div class="control">
+      <input type="number" id="min" placeholder="Precio mín (GTQ)">
+      <input type="number" id="max" placeholder="Precio máx (GTQ)">
+    </div>
+    <div class="control">
+      <select id="sort">
+        <option value="pop">Ordenar: Popularidad</option>
+        <option value="priceAsc">Precio ↑</option>
+        <option value="priceDesc">Precio ↓</option>
+        <option value="rating">Mejor valoración</option>
+      </select>
+      <div class="checks">
+        <label class="small"><input type="checkbox" id="onlyEbike"> Solo e-bike</label>
+        <label class="small"><input type="checkbox" id="onlyFolding"> Solo plegables</label>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="grid" class="grid"></div>
+</main>
+
+
+<!-- Drawer Carrito -->
+<aside id="drawer" class="drawer" aria-hidden="true">
+  <header>
+    <div class="topbar" style="padding:0">
+      <div class="brand"><div class="badge">🛒</div><div id="drawerTitle">Carrito</div></div>
+      <div class="spacer"></div>
+      <button id="closeCart" class="pill">✕ Cerrar</button>
+    </div>
+  </header>
+  <div id="cartItems" class="content"></div>
+  <footer>
+    <div class="line"><span>Subtotal</span><span id="subtotal">Q0.00</span></div>
+    <div class="line"><span>IVA (12%)</span><span id="iva">Q0.00</span></div>
+    <div class="line total"><span>Total</span><span id="total">Q0.00</span></div>
+    <div style="display:flex; gap:8px">
+      <button id="clearCart" class="pill">Vaciar</button>
+      <button id="checkout" class="pill eco" style="flex:1"></button>
+    </div>
+  </footer>
+</aside>
+
+<!-- Modal Detalle -->
+<div id="overlay" class="overlay" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="modal">
+    <div class="topbar" style="padding:10px 12px; border-bottom:1px solid var(--line)">
+      <div class="brand" id="mTitle"><div class="badge">ℹ️</div><div>Detalle</div></div>
+      <div class="spacer"></div>
+      <button id="closeModal" class="pill">✕ Cerrar</button>
+    </div>
+    <div class="body">
+      <img id="mImg" class="m-img" alt="Foto bicicleta">
+      <div class="m-info">
+        <div id="mTags" class="tags"></div>
+        <div class="row">
+          <div class="price" id="mPrice"></div>
+          <div class="stars" id="mStars"></div>
+        </div>
+        <div id="mDesc" style="color:#2a3d34; line-height:1.5"></div>
+        <div class="actions">
+          <button id="mAdd" class="btn eco"></button>
+          <button id="mGo" class="btn ghost">Calcular CO₂</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== Bandera de membresía desde PHP
+const MEMBER = {
+  active: <?php echo $membershipActive ? 'true' : 'false'; ?>,
+  until:  "<?php echo htmlspecialchars($membershipUntil ?: ''); ?>"
+};
+
+// ======= Datos de productos (cambia rutas a tus imágenes) =======
+const PRODUCTS = [
+  {id:'u1', name:'Urbana EcoCity 7V', type:'urbana', terrain:['asfalto'], price:1899, strike:2199, rating:4.5, pop:90, electric:false, folding:false, img:'img/Urban.png', tags:['guardabarros','portaequipaje','ciudad']},
+  {id:'h1', name:'Híbrida Versátil 2.1', type:'hibrida', terrain:['asfalto','mixto'], price:2799, strike:null, rating:4.4, pop:80, electric:false, folding:false, img:'img/hibrida.png', tags:['versátil','commuter']},
+  {id:'m1', name:'MTB Sendero 29"', type:'mtb', terrain:['mixto','tierra'], price:3499, strike:3899, rating:4.6, pop:95, electric:false, folding:false, img:'img/Sendero.jpg', tags:['suspensión','robusta']},
+  {id:'r1', name:'Ruta Pro Endurance', type:'ruta', terrain:['asfalto'], price:5999, strike:null, rating:4.8, pop:75, electric:false, folding:false, img:'img/escaladora.jpg', tags:['carretera','ligera']},
+  {id:'g1', name:'Gravel AllRoad', type:'gravel', terrain:['asfalto','mixto'], price:5199, strike:5499, rating:4.7, pop:70, electric:false, folding:false, img:'img/Gravel.jpg', tags:['mixto','aventura']},
+  {id:'p1', name:'Plegable Compact 20"', type:'plegable', terrain:['asfalto'], price:2699, strike:null, rating:4.3, pop:85, electric:false, folding:true, img:'img/plegable20.jpg', tags:['compacta','transporte público']},
+  {id:'e1', name:'E-Bike Ciudad Plus', type:'ebike', terrain:['asfalto','mixto'], price:6999, strike:7499, rating:4.7, pop:98, electric:true, folding:false, img:'img/EBike.png', tags:['asistencia','batería 36V']},
+  {id:'e2', name:'E-Gravel Explorer', type:'ebike', terrain:['mixto'], price:8999, strike:null, rating:4.9, pop:88, electric:true, folding:false, img:'img/Explorer.jpg', tags:['larga distancia','subidas']},
+  {id:'c1', name:'Cargo Family', type:'cargo', terrain:['asfalto'], price:10499, strike:null, rating:4.6, pop:60, electric:true, folding:false, img:'img/cargo family.png', tags:['niños','mandados']},
+  {id:'u2', name:'Urbana Fresh 3V', type:'urbana', terrain:['asfalto'], price:1499, strike:1799, rating:4.1, pop:65, electric:false, folding:false, img:'img/Urbana fresh.png', tags:['sencilla','ciudad']}
+];
+
+// ======= Estado =======
+const state = {
+  q:'', type:'', terrain:'', min:null, max:null, onlyE:false, onlyF:false, sort:'pop',
+  cart: JSON.parse(localStorage.getItem('ecobici_cart')||'[]'),
+  modal:null
+};
+
+// ======= Utils =======
+const $ = s => document.querySelector(s);
+const money = n => (n||0).toLocaleString('es-GT',{style:'currency', currency:'GTQ'});
+const starStr = r => '★'.repeat(Math.round(r)) + '☆'.repeat(5-Math.round(r));
+function placeholderImage(txt='EcoBici'){
+  const svg = encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='800' height='600'>
+      <defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+        <stop offset='0' stop-color='#28a745'/><stop offset='1' stop-color='#6ee7b7'/></linearGradient></defs>
+      <rect width='100%' height='100%' fill='url(#g)'/>
+      <text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-size='48' font-family='Arial' fill='white' opacity='.95'>${txt}</text>
+    </svg>`
+  );
+  return `data:image/svg+xml;charset=utf-8,${svg}`;
+}
+
+// Precio efectivo (membresía = alquiler Q0.00)
+const effectivePrice = p => MEMBER.active ? 0 : p.price;
+
+// ======= Filtros y render =======
+function applyFilters(){
+  let list = [...PRODUCTS];
+
+  if (state.q){
+    const q = state.q.toLowerCase();
+    list = list.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.tags.some(t => t.toLowerCase().includes(q)) ||
+      p.type.toLowerCase().includes(q)
+    );
+  }
+  if (state.type) list = list.filter(p => p.type===state.type);
+  if (state.terrain) list = list.filter(p => p.terrain.includes(state.terrain));
+  if (state.min!=null && state.min!=='') list = list.filter(p => p.price >= Number(state.min));
+  if (state.max!=null && state.max!=='') list = list.filter(p => p.price <= Number(state.max));
+  if (state.onlyE) list = list.filter(p => p.electric);
+  if (state.onlyF) list = list.filter(p => p.folding);
+
+  switch(state.sort){
+    case 'priceAsc': list.sort((a,b)=> a.price-b.price); break;
+    case 'priceDesc': list.sort((a,b)=> b.price-a.price); break;
+    case 'rating': list.sort((a,b)=> b.rating-a.rating); break;
+    default: list.sort((a,b)=> b.pop-a.pop);
+  }
+  return list;
+}
+
+function renderGrid(){
+  const grid = $('#grid');
+  const list = applyFilters();
+  grid.innerHTML = '';
+  if (!list.length){
+    grid.innerHTML = `<div class="card" style="grid-column:1/-1; padding:18px">No hay resultados. Ajusta los filtros.</div>`;
+    return;
+  }
+  list.forEach(p=>{
+    const priceText = MEMBER.active ? 'Q0.00 (membresía)' : money(p.price);
+    const ctaText   = MEMBER.active ? 'Alquilar' : 'Agregar';
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <img class="thumb" src="${p.img}" alt="${p.name}">
+      <div class="info">
+        <div class="name">${p.name}</div>
+        <div class="tags">
+          <span class="tag">${p.type}</span>
+          ${p.electric?'<span class="tag">e-bike</span>':''}
+          ${p.folding?'<span class="tag">plegable</span>':''}
+          ${p.terrain.map(t=>`<span class="tag">${t}</span>`).join('')}
+        </div>
+        <div class="row">
+          <div class="stars" title="${p.rating.toFixed(1)} / 5">${starStr(p.rating)}</div>
+          <div>
+            <span class="price">${priceText}</span>
+            ${(!MEMBER.active && p.strike)?`<span class="str">${money(p.strike)}</span>`:''}
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn eco" data-add="${p.id}">${ctaText}</button>
+          <button class="btn ghost" data-detail="${p.id}">Detalles</button>
+        </div>
+      </div>
+    `;
+    const img = card.querySelector('img');
+    img.onerror = ()=> img.src = placeholderImage(p.name);
+    grid.appendChild(card);
+  });
+
+  grid.querySelectorAll('[data-add]').forEach(b=> b.addEventListener('click', e => addToCart(e.target.dataset.add)));
+  grid.querySelectorAll('[data-detail]').forEach(b=> b.addEventListener('click', e => openModal(e.target.dataset.detail)));
+}
+
+// ======= Carrito =======
+function saveCart(){ localStorage.setItem('ecobici_cart', JSON.stringify(state.cart)); }
+function cartCount(){ return state.cart.reduce((a,c)=> a+c.qty, 0); }
+function addToCart(id){
+  const p = PRODUCTS.find(x=>x.id===id);
+  if (!p) return;
+  const price = effectivePrice(p);
+  const idx = state.cart.findIndex(x=>x.id===id);
+  if (idx>=0) state.cart[idx].qty += 1;
+  else state.cart.push({id:p.id, name:p.name, price, img:p.img, qty:1});
+  saveCart(); renderCart(); updateCartBadge();
+}
+function updateQty(id, delta){
+  const i = state.cart.findIndex(x=>x.id===id);
+  if (i<0) return;
+  state.cart[i].qty += delta;
+  if (state.cart[i].qty<=0) state.cart.splice(i,1);
+  saveCart(); renderCart(); updateCartBadge();
+}
+function removeItem(id){
+  state.cart = state.cart.filter(x=>x.id!==id);
+  saveCart(); renderCart(); updateCartBadge();
+}
+function totals(){
+  const sub = state.cart.reduce((a,c)=> a + c.price*c.qty, 0);
+  const iva = MEMBER.active ? 0 : sub * 0.12; // alquiler con membresía: Q0.00
+  const tot = sub + iva;
+  return {sub, iva, tot};
+}
+function renderCart(){
+  const cont = $('#cartItems');
+  cont.innerHTML = '';
+  if (!state.cart.length){
+    cont.innerHTML = `<div class="item" style="grid-template-columns:1fr"><div style="text-align:center;width:100%">Carrito vacío.</div></div>`;
+  } else {
+    state.cart.forEach(it=>{
+      const el = document.createElement('div');
+      el.className = 'item';
+      el.innerHTML = `
+        <img src="${it.img}" alt="${it.name}">
+        <div>
+          <div style="font-weight:700">${it.name}</div>
+          <div style="color:#466257">${MEMBER.active ? 'Q0.00 (membresía)' : money(it.price)}</div>
+          <div class="qty">
+            <button data-q="-1" data-id="${it.id}">−</button>
+            <span>${it.qty}</span>
+            <button data-q="1" data-id="${it.id}">+</button>
+            <button data-del="${it.id}" style="margin-left:8px;border:1px solid #ffd5d5;background:#ffecec;color:#7a1f1f">Eliminar</button>
+          </div>
+        </div>
+        <div style="font-weight:800">${MEMBER.active ? 'Q0.00' : money(it.price*it.qty)}</div>
+      `;
+      const img = el.querySelector('img');
+      img.onerror = ()=> img.src = placeholderImage('EcoBici');
+      cont.appendChild(el);
+    });
+  }
+  const t = totals();
+  $('#subtotal').textContent = MEMBER.active ? 'Q0.00' : money(t.sub);
+  $('#iva').textContent      = MEMBER.active ? 'Q0.00' : money(t.iva);
+  $('#total').textContent    = MEMBER.active ? 'Q0.00' : money(t.tot);
+
+  $('#drawerTitle').textContent = MEMBER.active ? 'Alquiler (membresía)' : 'Carrito';
+  const chk = $('#checkout');
+  chk.textContent = MEMBER.active ? 'Confirmar alquiler' : 'Proceder a pago';
+
+  cont.querySelectorAll('[data-q]').forEach(b=> b.addEventListener('click', e=>{
+    const id = e.target.getAttribute('data-id');
+    const d  = Number(e.target.getAttribute('data-q'));
+    updateQty(id, d);
+  }));
+  cont.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', e=> removeItem(e.target.getAttribute('data-del'))));
+}
+function updateCartBadge(){ $('#cartCount').textContent = cartCount(); }
+
+// ======= Modal Detalle =======
+function openModal(id){
+  const p = PRODUCTS.find(x=>x.id===id);
+  if (!p) return;
+  state.modal = p;
+  $('#mTitle').innerHTML = `<div class="badge">ℹ️</div><div>${p.name}</div>`;
+  const img = $('#mImg'); img.src = p.img; img.onerror = ()=> img.src = placeholderImage(p.name);
+  $('#mTags').innerHTML = `
+    <span class="tag">${p.type}</span>
+    ${p.electric?'<span class="tag">e-bike</span>':''}
+    ${p.folding?'<span class="tag">plegable</span>':''}
+    ${p.terrain.map(t=>`<span class="tag">${t}</span>`).join('')}
+    ${p.tags.map(t=>`<span class="tag">${t}</span>`).join('')}
+  `;
+  $('#mPrice').textContent = MEMBER.active ? 'Q0.00 (membresía)' : money(p.price);
+  $('#mStars').textContent = starStr(p.rating);
+  $('#mDesc').innerHTML = `
+    <ul style="margin:0 0 8px 18px">
+      <li>Optimizada para: <b>${p.terrain.join(', ')}</b>.</li>
+      <li>Ideal para usos: <b>${p.tags.join(', ')}</b>.</li>
+      <li>${p.electric?'Asistencia eléctrica para cuestas y trayectos medios.':'Transmisión eficiente, bajo mantenimiento.'}</li>
+    </ul>
+    <div class="tag">Stock demo</div>
+  `;
+  $('#mAdd').textContent = MEMBER.active ? 'Alquilar' : 'Agregar al carrito';
+  $('#overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(){
+  $('#overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  state.modal = null;
+}
+
+// ======= Eventos UI =======
+$('#btnBack').addEventListener('click', ()=> window.history.back());
+$('#btnCart').addEventListener('click', ()=> $('#drawer').classList.add('open'));
+$('#closeCart').addEventListener('click', ()=> $('#drawer').classList.remove('open'));
+$('#clearCart').addEventListener('click', ()=> { if(confirm('¿Vaciar carrito?')){ state.cart=[]; saveCart(); renderCart(); updateCartBadge(); }});
+$('#checkout').addEventListener('click', ()=>{
+  if (!state.cart.length) { alert('No hay artículos.'); return; }
+  if (MEMBER.active) {
+    // Aquí podrías hacer un fetch POST a rentar.php con los items.
+    alert('Alquiler confirmado (demo). Total Q0.00 por membresía.');
+    state.cart = []; saveCart(); renderCart(); updateCartBadge();
+    $('#drawer').classList.remove('open');
+  } else {
+    alert('Demo: aquí iría el flujo de pago.');
+  }
+});
+$('#overlay').addEventListener('click', (e)=> { if(e.target.id==='overlay') closeModal(); });
+$('#closeModal').addEventListener('click', closeModal);
+$('#mAdd').addEventListener('click', ()=> { if(state.modal){ addToCart(state.modal.id); closeModal(); $('#drawer').classList.add('open'); }});
+$('#mGo').addEventListener('click', ()=> { window.location.href = 'co2.html'; });
+
+['q','type','terrain','min','max','sort'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', ()=>{
+    state[id] = (id==='min' || id==='max') ? document.getElementById(id).value : document.getElementById(id).value.trim();
+    renderGrid();
+  });
+});
+$('#onlyEbike').addEventListener('change', e=> { state.onlyE = e.target.checked; renderGrid(); });
+$('#onlyFolding').addEventListener('change', e=> { state.onlyF = e.target.checked; renderGrid(); });
+
+// ======= Init =======
+renderGrid();
+renderCart();
+updateCartBadge();
+</script>
+</body>
+</html>

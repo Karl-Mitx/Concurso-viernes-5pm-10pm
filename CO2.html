@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>EcoBici • Cálculo de CO₂ evitado</title>
+  <style>
+    :root{
+      --eco:#28a745; --eco2:#218838; --ink:#0f1720; --muted:#5b6b72; --line:#e2efe6; --panel:#ffffff;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; color:var(--ink);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(40,167,69,.10) 0, transparent 60%),
+        radial-gradient(1200px 600px at 110% 10%, rgba(33,136,56,.10) 0, transparent 55%),
+        #f6faf7;
+      background-image:
+        url("data:image/svg+xml;utf8,\
+        <svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'>\
+          <path d='M18 68c18-10 30-30 34-44c-14 4-34 16-44 34c-2 3 2 8 6 10c3 2 8 2 4 0z' fill='%23cfead8' opacity='.35'/>\
+          <path d='M92 38c-18 10-30 30-34 44c14-4 34-16 44-34c2-3-2-8-6-10c-3-2-8-2-4 0z' fill='%23cfead8' opacity='.28'/>\
+        </svg>");
+      background-size: cover, cover, auto, 120px 120px; background-blend-mode: normal, normal, multiply;
+      min-height:100dvh; display:flex; align-items:center; justify-content:center; padding:20px;
+    }
+    .wrap{width:100%; max-width:980px}
+    .card{
+      background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px;
+      box-shadow:0 20px 40px rgba(0,0,0,.08);
+    }
+    .header{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+    .badge{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+      background:linear-gradient(135deg,var(--eco),#6ee7b7); color:#fff; font-weight:800; box-shadow:0 10px 24px rgba(40,167,69,.25)}
+    .title{font-weight:800; font-size:22px}
+    .sub{color:var(--muted); margin-top:-4px}
+
+    .grid{display:grid; grid-template-columns:2fr 1.2fr; gap:14px; margin-top:12px}
+    @media (max-width:900px){ .grid{grid-template-columns:1fr} }
+
+    .panel{border:1px solid var(--line); border-radius:14px; padding:14px; background:#fff}
+    .panel h3{margin:0 0 10px; font-size:16px}
+    .row{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+    @media (max-width:600px){ .row{grid-template-columns:1fr} }
+
+    label{font-size:13px; color:#244235; font-weight:700}
+    input,select{
+      width:100%; padding:10px 12px; border:1px solid #cfead8; border-radius:10px; outline:0; background:#fbfffd;
+      font-size:14px;
+    }
+    input:focus,select:focus{border-color:var(--eco); box-shadow:0 0 0 4px rgba(40,167,69,.12)}
+
+    .actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+    .btn{
+      padding:10px 12px; border-radius:10px; border:1px solid #d9f1e2; background:#eef8f1; color:#17412b;
+      font-weight:700; cursor:pointer;
+    }
+    .btn.eco{ background:linear-gradient(135deg,var(--eco),var(--eco2)); border-color:var(--eco); color:#fff; box-shadow:0 10px 20px rgba(40,167,69,.18) }
+    .btn.eco:hover{ filter:brightness(.98) }
+    .btn.link{ background:#fff; border:1px dashed #cfead8; }
+
+    .kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media (max-width:600px){ .kpis{grid-template-columns:1fr} }
+    .kpi{border:1px solid var(--line); border-radius:12px; padding:12px; background:#f9fdfb}
+    .kpi b{font-size:20px}
+
+    .footnote{font-size:12px; color:var(--muted); margin-top:6px}
+    .sep{height:10px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="header">
+        <div class="badge">🌿</div>
+        <div>
+          <div class="title">EcoBici • Cálculo de CO₂ evitado</div>
+          <div class="sub">Compara emisiones de un viaje en vehículo vs. bicicleta (mecánica o eléctrica).</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <!-- FORM -->
+        <div class="panel">
+          <h3>Parámetros del cálculo</h3>
+
+          <div class="row">
+            <div>
+              <label>Distancia por viaje (km)</label>
+              <input type="number" step="0.01" id="km" placeholder="Ej. 3.5">
+            </div>
+            <div>
+              <label>Viajes por día</label>
+              <input type="number" step="1" id="viajesDia" value="2">
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Días</label>
+              <input type="number" step="1" id="dias" value="20">
+            </div>
+            <div>
+              <label>Modo reemplazado</label>
+              <select id="baseline">
+                <option value="car">Auto particular</option>
+                <option value="moto">Motocicleta</option>
+                <option value="bus">Bus (por pasajero)</option>
+                <option value="custom">Otro (personalizado)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row" id="baselineRow">
+            <div>
+              <label>Factor del modo (g CO₂ / km)</label>
+              <input type="number" step="1" id="factorBaseline" value="120">
+            </div>
+            <div>
+              <label>Tipo de bici</label>
+              <select id="bikeType">
+                <option value="mecanica">Mecánica (0 emisiones)</option>
+                <option value="ebike">Eléctrica</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row" id="ebikeRow" style="display:none">
+            <div>
+              <label>Consumo e-bike (Wh/km)</label>
+              <input type="number" step="0.1" id="whKm" value="10">
+            </div>
+            <div>
+              <label>Factor red (kg CO₂/kWh)</label>
+              <input type="number" step="0.01" id="gridKg" value="0.45">
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn" id="back">Volver</button>
+            <button class="btn eco" id="calc">Calcular</button>
+            <button class="btn" id="reset">Reiniciar</button>
+            <button class="btn link" id="loadKm">Cargar km de última ruta</button>
+            <button class="btn link" id="exportCsv">Exportar CSV</button>
+          </div>
+
+          <div class="footnote">
+            Sugerencias: Auto ≈ 120 g/km, Moto ≈ 90 g/km, Bus ≈ 80 g/km (por pasajero). E-bike típica ≈ 5–15 Wh/km (usa 10 por defecto).
+          </div>
+        </div>
+
+        <!-- RESULTADOS -->
+        <div class="panel">
+          <h3>Resultados</h3>
+          <div class="kpis">
+            <div class="kpi">
+              <div>Total recorrido</div>
+              <b id="outKm">—</b>
+              <div class="footnote">km</div>
+            </div>
+            <div class="kpi">
+              <div>Reducción neta</div>
+              <b id="outSaved">—</b>
+              <div class="footnote">kg CO₂ evitados</div>
+            </div>
+          </div>
+          <div class="sep"></div>
+          <div class="kpis">
+            <div class="kpi">
+              <div>Emisión del vehículo</div>
+              <b id="outVeh">—</b>
+              <div class="footnote">kg CO₂</div>
+            </div>
+            <div class="kpi">
+              <div>Emisión de la bici</div>
+              <b id="outBike">—</b>
+              <div class="footnote">kg CO₂ (0 si es mecánica)</div>
+            </div>
+          </div>
+          <div class="sep"></div>
+          <div class="kpi">
+            <div>Eficiencia</div>
+            <b id="outPct">—</b>
+            <div class="footnote">reducción porcentual vs. vehículo</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footnote" style="margin-top:10px">
+        Tip: el botón “Cargar km de última ruta” toma la distancia (km) del último ítem guardado por tu módulo de Rutas en <code>localStorage.ecobici_rutas</code>.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const kmEl = document.getElementById('km');
+    const viajesDiaEl = document.getElementById('viajesDia');
+    const diasEl = document.getElementById('dias');
+    const baselineEl = document.getElementById('baseline');
+    const factorBaselineEl = document.getElementById('factorBaseline');
+    const bikeTypeEl = document.getElementById('bikeType');
+    const whKmEl = document.getElementById('whKm');
+    const gridKgEl = document.getElementById('gridKg');
+    const ebikeRow = document.getElementById('ebikeRow');
+
+    const outKm = document.getElementById('outKm');
+    const outVeh = document.getElementById('outVeh');
+    const outBike = document.getElementById('outBike');
+    const outSaved = document.getElementById('outSaved');
+    const outPct = document.getElementById('outPct');
+
+    function setBaselineFactor(){
+      const mode = baselineEl.value;
+      const map = { car:120, moto:90, bus:80, custom: Number(factorBaselineEl.value || 120) };
+      factorBaselineEl.value = map[mode] ?? 120;
+      factorBaselineEl.disabled = (mode !== 'custom');
+    }
+    baselineEl.addEventListener('change', setBaselineFactor);
+    setBaselineFactor();
+
+    bikeTypeEl.addEventListener('change', ()=>{
+      ebikeRow.style.display = (bikeTypeEl.value === 'ebike') ? 'grid' : 'none';
+    });
+
+    function calc(){
+      const km = Number(kmEl.value || 0);
+      const viajesDia = Number(viajesDiaEl.value || 0);
+      const dias = Number(diasEl.value || 0);
+      const totalKm = km * viajesDia * dias;
+
+      const gPerKm = Number(factorBaselineEl.value || 0);
+      const vehKg = (totalKm * gPerKm) / 1000;
+
+      let bikeKg = 0;
+      if (bikeTypeEl.value === 'ebike') {
+        const whKm = Number(whKmEl.value || 0);   // Wh por km
+        const gridKg = Number(gridKgEl.value || 0); // kg CO2 por kWh
+        const kWh = (totalKm * whKm) / 1000;      // Wh -> kWh
+        bikeKg = kWh * gridKg;
+      }
+
+      const savedKg = Math.max(vehKg - bikeKg, 0);
+      const pct = vehKg > 0 ? (savedKg/vehKg)*100 : 0;
+
+      outKm.textContent = totalKm.toFixed(2);
+      outVeh.textContent = vehKg.toFixed(2);
+      outBike.textContent = bikeKg.toFixed(2);
+      outSaved.textContent = savedKg.toFixed(2);
+      outPct.textContent = pct.toFixed(0) + '%';
+    }
+
+    document.getElementById('calc').addEventListener('click', calc);
+    document.getElementById('reset').addEventListener('click', ()=>{
+      kmEl.value = '';
+      viajesDiaEl.value = 2;
+      diasEl.value = 20;
+      baselineEl.value = 'car';
+      setBaselineFactor();
+      bikeTypeEl.value = 'mecanica';
+      ebikeRow.style.display = 'none';
+      whKmEl.value = 10; gridKgEl.value = 0.45;
+      [outKm,outVeh,outBike,outSaved,outPct].forEach(el=>el.textContent='—');
+    });
+
+    document.getElementById('loadKm').addEventListener('click', ()=>{
+      try{
+        const list = JSON.parse(localStorage.getItem('ecobici_rutas') || '[]');
+        if (!list.length) return alert('No hay rutas guardadas.');
+        const last = list[list.length-1];
+        if (last.km) {
+          kmEl.value = Number(last.km);
+          alert('Distancia por viaje establecida en ' + last.km + ' km (última ruta).');
+        } else {
+          alert('La última ruta no tiene distancia registrada.');
+        }
+      }catch(e){ alert('No fue posible leer las rutas guardadas.'); }
+    });
+
+    document.getElementById('exportCsv').addEventListener('click', ()=>{
+      const rows = [
+        ['Distancia por viaje (km)', kmEl.value],
+        ['Viajes por día', viajesDiaEl.value],
+        ['Días', diasEl.value],
+        ['Modo reemplazado (g/km)', factorBaselineEl.value],
+        ['Tipo bici', bikeTypeEl.value],
+        ['Consumo e-bike (Wh/km)', (bikeTypeEl.value==='ebike'?whKmEl.value:'0')],
+        ['Factor red (kg/kWh)', (bikeTypeEl.value==='ebike'?gridKgEl.value:'0')],
+        ['Total km', outKm.textContent],
+        ['CO2 vehículo (kg)', outVeh.textContent],
+        ['CO2 bicicleta (kg)', outBike.textContent],
+        ['CO2 evitado (kg)', outSaved.textContent],
+        ['Reducción (%)', outPct.textContent]
+      ];
+      const csv = rows.map(r => r.map(v => `"${String(v).replaceAll('"','""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'ecobici_co2.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    // Botón Volver
+    document.getElementById('back').addEventListener('click', ()=> window.history.back());
+
+    // Cálculo inicial
+    calc();
+  </script>
+</body>
+</html>
