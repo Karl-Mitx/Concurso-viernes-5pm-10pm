@@ -1,3 +1,35 @@
+<?php
+// selecbici.php
+require 'conexion.php';
+session_start();
+
+// Bloquea si no hay sesión
+$u = $_SESSION['usuario'] ?? null;
+if (!$u) { header('Location: index.php'); exit; }
+
+// Cargar membresía del usuario
+function getMembresiaByUser(mysqli $mysqli, int $uid) {
+  $stmt = $mysqli->prepare("SELECT tipo, inicio, fin, estado FROM membresias WHERE usuario_id=? LIMIT 1");
+  $stmt->bind_param('i', $uid);
+  $stmt->execute();
+  $res = $stmt->get_result();
+  $row = $res->fetch_assoc() ?: null;
+  $stmt->close();
+  return $row;
+}
+$m = getMembresiaByUser($mysqli, (int)$u['id']);
+
+// Calcular si está vigente
+$membershipActive = false;
+$membershipUntil  = '';
+if ($m && $m['estado'] === 'activa' && !empty($m['fin'])) {
+  try {
+    $hoy = new DateTime('today');
+    $fin = new DateTime($m['fin']);
+    if ($fin >= $hoy) { $membershipActive = true; $membershipUntil = $fin->format('Y-m-d'); }
+  } catch (Exception $e) { /* noop */ }
+}
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -109,6 +141,8 @@
 
     /* Helpers */
     .hide{display:none}
+    .member {border:1px solid #bbf7d0;background:#ecfdf5;color:#14532d}
+    .danger {border:1px solid #ffd6d6;background:#fff1f1;color:#7a1f1f}
   </style>
 </head>
 <body>
@@ -121,6 +155,13 @@
     </div>
     <button id="btnBack" class="pill">← Volver</button>
     <div class="spacer"></div>
+
+    <?php if ($membershipActive): ?>
+      <span class="pill member">🌿 Membresía activa · vence: <?= htmlspecialchars($membershipUntil) ?></span>
+    <?php else: ?>
+      <a class="pill danger" href="comprar_membresia.php">❗ Sin membresía · Comprar</a>
+    <?php endif; ?>
+
     <button id="btnCart" class="pill eco">🛒 Carrito <span id="cartCount" class="cart-count">0</span></button>
   </div>
 
@@ -173,7 +214,7 @@
 <aside id="drawer" class="drawer" aria-hidden="true">
   <header>
     <div class="topbar" style="padding:0">
-      <div class="brand"><div class="badge">🛒</div><div>Carrito</div></div>
+      <div class="brand"><div class="badge">🛒</div><div id="drawerTitle">Carrito</div></div>
       <div class="spacer"></div>
       <button id="closeCart" class="pill">✕ Cerrar</button>
     </div>
@@ -185,7 +226,7 @@
     <div class="line total"><span>Total</span><span id="total">Q0.00</span></div>
     <div style="display:flex; gap:8px">
       <button id="clearCart" class="pill">Vaciar</button>
-      <button id="checkout" class="pill eco" style="flex:1">Proceder a pago</button>
+      <button id="checkout" class="pill eco" style="flex:1"></button>
     </div>
   </footer>
 </aside>
@@ -208,7 +249,7 @@
         </div>
         <div id="mDesc" style="color:#2a3d34; line-height:1.5"></div>
         <div class="actions">
-          <button id="mAdd" class="btn eco">Agregar al carrito</button>
+          <button id="mAdd" class="btn eco"></button>
           <button id="mGo" class="btn ghost">Calcular CO₂</button>
         </div>
       </div>
@@ -217,13 +258,19 @@
 </div>
 
 <script>
-/* ======= Datos de productos======= */
+// ===== Bandera de membresía desde PHP
+const MEMBER = {
+  active: <?php echo $membershipActive ? 'true' : 'false'; ?>,
+  until:  "<?php echo htmlspecialchars($membershipUntil ?: ''); ?>"
+};
+
+// ======= Datos de productos (cambia rutas a tus imágenes) =======
 const PRODUCTS = [
   {id:'u1', name:'Urbana EcoCity 7V', type:'urbana', terrain:['asfalto'], price:1899, strike:2199, rating:4.5, pop:90, electric:false, folding:false, img:'img/Urban.png', tags:['guardabarros','portaequipaje','ciudad']},
   {id:'h1', name:'Híbrida Versátil 2.1', type:'hibrida', terrain:['asfalto','mixto'], price:2799, strike:null, rating:4.4, pop:80, electric:false, folding:false, img:'img/hibrida.png', tags:['versátil','commuter']},
   {id:'m1', name:'MTB Sendero 29"', type:'mtb', terrain:['mixto','tierra'], price:3499, strike:3899, rating:4.6, pop:95, electric:false, folding:false, img:'img/Sendero.jpg', tags:['suspensión','robusta']},
   {id:'r1', name:'Ruta Pro Endurance', type:'ruta', terrain:['asfalto'], price:5999, strike:null, rating:4.8, pop:75, electric:false, folding:false, img:'img/escaladora.jpg', tags:['carretera','ligera']},
-  {id:'g1', name:'Gravel AllRoad', type:'gravel', terrain:['asfalto','mixto'], price:5199, strike:5499, rating:4.7, pop:70, electric:false, folding:false, img:'img/Gravel', tags:['mixto','aventura']},
+  {id:'g1', name:'Gravel AllRoad', type:'gravel', terrain:['asfalto','mixto'], price:5199, strike:5499, rating:4.7, pop:70, electric:false, folding:false, img:'img/Gravel.jpg', tags:['mixto','aventura']},
   {id:'p1', name:'Plegable Compact 20"', type:'plegable', terrain:['asfalto'], price:2699, strike:null, rating:4.3, pop:85, electric:false, folding:true, img:'img/plegable20.jpg', tags:['compacta','transporte público']},
   {id:'e1', name:'E-Bike Ciudad Plus', type:'ebike', terrain:['asfalto','mixto'], price:6999, strike:7499, rating:4.7, pop:98, electric:true, folding:false, img:'img/EBike.png', tags:['asistencia','batería 36V']},
   {id:'e2', name:'E-Gravel Explorer', type:'ebike', terrain:['mixto'], price:8999, strike:null, rating:4.9, pop:88, electric:true, folding:false, img:'img/Explorer.jpg', tags:['larga distancia','subidas']},
@@ -231,14 +278,14 @@ const PRODUCTS = [
   {id:'u2', name:'Urbana Fresh 3V', type:'urbana', terrain:['asfalto'], price:1499, strike:1799, rating:4.1, pop:65, electric:false, folding:false, img:'img/Urbana fresh.png', tags:['sencilla','ciudad']}
 ];
 
-/* ======= Estado ======= */
+// ======= Estado =======
 const state = {
   q:'', type:'', terrain:'', min:null, max:null, onlyE:false, onlyF:false, sort:'pop',
   cart: JSON.parse(localStorage.getItem('ecobici_cart')||'[]'),
   modal:null
 };
 
-/* ======= Utilidades ======= */
+// ======= Utils =======
 const $ = s => document.querySelector(s);
 const money = n => (n||0).toLocaleString('es-GT',{style:'currency', currency:'GTQ'});
 const starStr = r => '★'.repeat(Math.round(r)) + '☆'.repeat(5-Math.round(r));
@@ -254,7 +301,10 @@ function placeholderImage(txt='EcoBici'){
   return `data:image/svg+xml;charset=utf-8,${svg}`;
 }
 
-/* ======= Render de productos ======= */
+// Precio efectivo (membresía = alquiler Q0.00)
+const effectivePrice = p => MEMBER.active ? 0 : p.price;
+
+// ======= Filtros y render =======
 function applyFilters(){
   let list = [...PRODUCTS];
 
@@ -277,7 +327,7 @@ function applyFilters(){
     case 'priceAsc': list.sort((a,b)=> a.price-b.price); break;
     case 'priceDesc': list.sort((a,b)=> b.price-a.price); break;
     case 'rating': list.sort((a,b)=> b.rating-a.rating); break;
-    default: list.sort((a,b)=> b.pop-a.pop); // popularidad
+    default: list.sort((a,b)=> b.pop-a.pop);
   }
   return list;
 }
@@ -291,6 +341,9 @@ function renderGrid(){
     return;
   }
   list.forEach(p=>{
+    const priceText = MEMBER.active ? 'Q0.00 (membresía)' : money(p.price);
+    const ctaText   = MEMBER.active ? 'Alquilar' : 'Agregar';
+
     const card = document.createElement('div');
     card.className = 'card';
     card.innerHTML = `
@@ -306,12 +359,12 @@ function renderGrid(){
         <div class="row">
           <div class="stars" title="${p.rating.toFixed(1)} / 5">${starStr(p.rating)}</div>
           <div>
-            <span class="price">${money(p.price)}</span>
-            ${p.strike?`<span class="str">${money(p.strike)}</span>`:''}
+            <span class="price">${priceText}</span>
+            ${(!MEMBER.active && p.strike)?`<span class="str">${money(p.strike)}</span>`:''}
           </div>
         </div>
         <div class="actions">
-          <button class="btn eco" data-add="${p.id}">Agregar</button>
+          <button class="btn eco" data-add="${p.id}">${ctaText}</button>
           <button class="btn ghost" data-detail="${p.id}">Detalles</button>
         </div>
       </div>
@@ -321,20 +374,20 @@ function renderGrid(){
     grid.appendChild(card);
   });
 
-  // Bind botones
   grid.querySelectorAll('[data-add]').forEach(b=> b.addEventListener('click', e => addToCart(e.target.dataset.add)));
   grid.querySelectorAll('[data-detail]').forEach(b=> b.addEventListener('click', e => openModal(e.target.dataset.detail)));
 }
 
-/* ======= Carrito ======= */
+// ======= Carrito =======
 function saveCart(){ localStorage.setItem('ecobici_cart', JSON.stringify(state.cart)); }
 function cartCount(){ return state.cart.reduce((a,c)=> a+c.qty, 0); }
 function addToCart(id){
   const p = PRODUCTS.find(x=>x.id===id);
   if (!p) return;
+  const price = effectivePrice(p);
   const idx = state.cart.findIndex(x=>x.id===id);
   if (idx>=0) state.cart[idx].qty += 1;
-  else state.cart.push({id:p.id, name:p.name, price:p.price, img:p.img, qty:1});
+  else state.cart.push({id:p.id, name:p.name, price, img:p.img, qty:1});
   saveCart(); renderCart(); updateCartBadge();
 }
 function updateQty(id, delta){
@@ -350,7 +403,7 @@ function removeItem(id){
 }
 function totals(){
   const sub = state.cart.reduce((a,c)=> a + c.price*c.qty, 0);
-  const iva = sub * 0.12;
+  const iva = MEMBER.active ? 0 : sub * 0.12; // alquiler con membresía: Q0.00
   const tot = sub + iva;
   return {sub, iva, tot};
 }
@@ -367,7 +420,7 @@ function renderCart(){
         <img src="${it.img}" alt="${it.name}">
         <div>
           <div style="font-weight:700">${it.name}</div>
-          <div style="color:#466257">${money(it.price)}</div>
+          <div style="color:#466257">${MEMBER.active ? 'Q0.00 (membresía)' : money(it.price)}</div>
           <div class="qty">
             <button data-q="-1" data-id="${it.id}">−</button>
             <span>${it.qty}</span>
@@ -375,7 +428,7 @@ function renderCart(){
             <button data-del="${it.id}" style="margin-left:8px;border:1px solid #ffd5d5;background:#ffecec;color:#7a1f1f">Eliminar</button>
           </div>
         </div>
-        <div style="font-weight:800">${money(it.price*it.qty)}</div>
+        <div style="font-weight:800">${MEMBER.active ? 'Q0.00' : money(it.price*it.qty)}</div>
       `;
       const img = el.querySelector('img');
       img.onerror = ()=> img.src = placeholderImage('EcoBici');
@@ -383,9 +436,13 @@ function renderCart(){
     });
   }
   const t = totals();
-  $('#subtotal').textContent = money(t.sub);
-  $('#iva').textContent = money(t.iva);
-  $('#total').textContent = money(t.tot);
+  $('#subtotal').textContent = MEMBER.active ? 'Q0.00' : money(t.sub);
+  $('#iva').textContent      = MEMBER.active ? 'Q0.00' : money(t.iva);
+  $('#total').textContent    = MEMBER.active ? 'Q0.00' : money(t.tot);
+
+  $('#drawerTitle').textContent = MEMBER.active ? 'Alquiler (membresía)' : 'Carrito';
+  const chk = $('#checkout');
+  chk.textContent = MEMBER.active ? 'Confirmar alquiler' : 'Proceder a pago';
 
   cont.querySelectorAll('[data-q]').forEach(b=> b.addEventListener('click', e=>{
     const id = e.target.getAttribute('data-id');
@@ -396,7 +453,7 @@ function renderCart(){
 }
 function updateCartBadge(){ $('#cartCount').textContent = cartCount(); }
 
-/* ======= Modal Detalle ======= */
+// ======= Modal Detalle =======
 function openModal(id){
   const p = PRODUCTS.find(x=>x.id===id);
   if (!p) return;
@@ -410,7 +467,7 @@ function openModal(id){
     ${p.terrain.map(t=>`<span class="tag">${t}</span>`).join('')}
     ${p.tags.map(t=>`<span class="tag">${t}</span>`).join('')}
   `;
-  $('#mPrice').textContent = money(p.price);
+  $('#mPrice').textContent = MEMBER.active ? 'Q0.00 (membresía)' : money(p.price);
   $('#mStars').textContent = starStr(p.rating);
   $('#mDesc').innerHTML = `
     <ul style="margin:0 0 8px 18px">
@@ -420,6 +477,7 @@ function openModal(id){
     </ul>
     <div class="tag">Stock demo</div>
   `;
+  $('#mAdd').textContent = MEMBER.active ? 'Alquilar' : 'Agregar al carrito';
   $('#overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -429,12 +487,22 @@ function closeModal(){
   state.modal = null;
 }
 
-/* ======= Eventos UI ======= */
+// ======= Eventos UI =======
 $('#btnBack').addEventListener('click', ()=> window.history.back());
 $('#btnCart').addEventListener('click', ()=> $('#drawer').classList.add('open'));
 $('#closeCart').addEventListener('click', ()=> $('#drawer').classList.remove('open'));
 $('#clearCart').addEventListener('click', ()=> { if(confirm('¿Vaciar carrito?')){ state.cart=[]; saveCart(); renderCart(); updateCartBadge(); }});
-$('#checkout').addEventListener('click', ()=> alert('Demo: aquí iría el flujo de pago / membresía.'));
+$('#checkout').addEventListener('click', ()=>{
+  if (!state.cart.length) { alert('No hay artículos.'); return; }
+  if (MEMBER.active) {
+    // Aquí podrías hacer un fetch POST a rentar.php con los items.
+    alert('Alquiler confirmado (demo). Total Q0.00 por membresía.');
+    state.cart = []; saveCart(); renderCart(); updateCartBadge();
+    $('#drawer').classList.remove('open');
+  } else {
+    alert('Demo: aquí iría el flujo de pago.');
+  }
+});
 $('#overlay').addEventListener('click', (e)=> { if(e.target.id==='overlay') closeModal(); });
 $('#closeModal').addEventListener('click', closeModal);
 $('#mAdd').addEventListener('click', ()=> { if(state.modal){ addToCart(state.modal.id); closeModal(); $('#drawer').classList.add('open'); }});
@@ -449,7 +517,7 @@ $('#mGo').addEventListener('click', ()=> { window.location.href = 'co2.html'; })
 $('#onlyEbike').addEventListener('change', e=> { state.onlyE = e.target.checked; renderGrid(); });
 $('#onlyFolding').addEventListener('change', e=> { state.onlyF = e.target.checked; renderGrid(); });
 
-/* ======= Init ======= */
+// ======= Init =======
 renderGrid();
 renderCart();
 updateCartBadge();

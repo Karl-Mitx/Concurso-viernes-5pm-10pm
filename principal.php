@@ -121,7 +121,7 @@ $foto = $usuario['foto'] ?? '';
         <div class="role">Rol: <strong><?= e(strtoupper($rol)) ?></strong></div>
 
         <div class="actions">
-          <a class="btn brand" href="home.html">Ir a la página principal</a>
+          <a class="btn brand" href="home.php">Ir a la página principal</a>
           <?php if ($rol === 'admin'): ?>
             <a class="btn" href="catalogo.php">Catálogo de usuarios</a>
           <?php endif; ?>

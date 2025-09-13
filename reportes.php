@@ -252,7 +252,7 @@ if ($inicio2 && $fin2 && isset($_POST['ingresos'])) {
             <?php endif; ?>
         </div>
 
-        <a href="home.html" class="volver">⬅ Volver al inicio</a>
+        <a href="home.php" class="volver">⬅ Volver al inicio</a>
     </div>
 </body>
 </html>
